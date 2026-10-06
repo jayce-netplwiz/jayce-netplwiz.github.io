@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LC - Premium Photo Frame Studio</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gold: {
+                            400: '#facc15',
+                            500: '#eab308',
+                            600: '#ca8a04',
+                        },
+                        brand: {
+                            dark: '#0B0F17',
+                            card: '#151C2C',
+                            accent: '#EC4899',
+                            purple: '#8B5CF6'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Playfair Display', 'serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #080B11;
+            color: #F3F4F6;
+        }
+        .font-serif-title {
+            font-family: 'Playfair Display', serif;
+        }
+        .glass-panel {
+            background: rgba(21, 28, 44, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-button {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+        .glass-button:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+        .neon-glow {
+            box-shadow: 0 0 25px -5px rgba(236, 72, 153, 0.3);
+        }
+        .gold-glow {
+            box-shadow: 0 0 25px -5px rgba(234, 179, 8, 0.3);
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0B0F17;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1f293d;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #374151;
+        }
+
+        /* Canvas Frame Transitions */
+        #frameCanvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            max-height: 600px;
+            box-shadow: 0 20px 40px -15px rgba(0,0,0,0.8);
+        }
+
+        @media (max-width: 640px) {
+            #previewCard {
+                min-height: 0;
+            }
+
+            #previewStatus {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+
+            #frameCanvas {
+                max-height: 60vh;
+                max-height: 60svh;
+            }
+
+            #eventTitleInput,
+            #eventSubtextInput {
+                font-size: 16px;
+            }
+
+            #zoomOutButton,
+            #zoomInButton {
+                width: 2.75rem;
+                height: 2.75rem;
+            }
+
+            #toastNotification {
+                left: 1rem;
+                right: 1rem;
+                justify-content: center;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-pink-500 selection:text-white">
+
+    <header class="sticky top-0 z-50 glass-panel border-b border-white/10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+            <!-- LC Logo -->
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="window.scrollTo({top:0, behavior:'smooth'})">
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-pink-500 via-purple-600 to-indigo-600 flex items-center justify-center font-black text-2xl text-white tracking-widest shadow-lg shadow-pink-500/20 ring-1 ring-white/20">
+                    LC
+                </div>
+                <div>
+                    <span class="font-extrabold text-xl tracking-wider text-white flex items-center gap-1.5">
+                        LC <span class="text-xs px-2 py-0.5 rounded-full bg-pink-500/20 text-pink-400 border border-pink-500/30 font-semibold uppercase tracking-wider">Frame Studio</span>
+                    </span>
+                    <p class="text-[11px] text-gray-400">Luxury Event Photo Booth Layouts</p>
+                </div>
+            </div>
+
+            <!-- Quick Info Badge & Action -->
+            <div class="flex items-center space-x-4">
+                <div class="hidden md:flex items-center space-x-2 text-xs font-medium text-gray-400 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Live Frame Customizer v3.0</span>
+                </div>
+                <button onclick="shareSelection()" class="glass-button px-4 py-2 rounded-xl text-xs font-semibold text-white flex items-center space-x-2 hover:border-pink-500/50 transition-all">
+                    <i class="fa-solid fa-share-nodes text-pink-400"></i>
+                    <span class="hidden sm:inline">Share Frame ID</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+        <div class="grid lg:grid-cols-12 gap-8 items-start">
+
+            <div class="lg:col-span-7 flex flex-col items-center">
+                <!-- Preview Canvas Card container -->
+                <div id="previewCard" class="w-full glass-panel rounded-3xl p-4 sm:p-8 flex flex-col items-center justify-center relative min-h-[500px] overflow-hidden">
+                    
+                    <!-- Top Status Bar -->
+                    <div id="previewStatus" class="w-full flex items-center justify-between mb-6 text-xs text-gray-400 border-b border-white/5 pb-3">
+                        <span class="flex items-center gap-2">
+                            <i class="fa-solid fa-eye text-pink-400"></i>
+                            <span id="currentLayoutName" class="font-semibold text-gray-200">2x6 Classic Strip</span>
+                        </span>
+                        <span id="frameDimTag" class="bg-white/10 px-2.5 py-0.5 rounded-full text-[10px] font-mono text-gray-300">
+                            600 x 1800 px (300 DPI)
+                        </span>
+                    </div>
+
+                    <!-- Canvas Container -->
+                    <div class="relative flex items-center justify-center w-full my-auto py-4">
+                        <canvas id="frameCanvas" class="rounded-xl transition-all duration-300 shadow-2xl max-h-[600px] object-contain"></canvas>
+                        
+                        <!-- Canvas Loading Overlay -->
+                        <div id="canvasLoader" class="absolute inset-0 bg-brand-dark/80 backdrop-blur-md rounded-xl flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-300">
+                            <i class="fa-solid fa-circle-notch fa-spin text-3xl text-pink-500 mb-3"></i>
+                            <p class="text-xs font-semibold text-gray-300">Rendering LC Overlay Template...</p>
+                        </div>
+                    </div>
+
+                    <div class="w-full flex flex-wrap items-center justify-center gap-3 text-xs">
+                        <span id="selectedPhotoLabel" class="text-gray-400 min-w-24 text-center">Photo 1 selected · 100%</span>
+                        <div class="flex items-center gap-2">
+                            <button id="zoomOutButton" onclick="adjustSelectedPhotoZoom(-1)" class="glass-button w-9 h-9 rounded-xl text-gray-200 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all" type="button" aria-label="Zoom out photo" title="Zoom out">
+                                <i class="fa-solid fa-minus"></i>
+                            </button>
+                            <button onclick="resetSelectedPhotoZoom()" class="glass-button px-3 h-11 rounded-xl text-gray-300 hover:text-white transition-all" type="button">Reset zoom</button>
+                            <button id="zoomInButton" onclick="adjustSelectedPhotoZoom(1)" class="glass-button w-9 h-9 rounded-xl text-gray-200 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-all" type="button" aria-label="Zoom in photo" title="Zoom in">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
+                        <span class="text-gray-500">Select or drag a photo to adjust it</span>
+                    </div>
+
+                    <!-- Photo Upload / Sample Controls -->
+                    <div class="w-full mt-6 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center space-x-2">
+                            <label class="glass-button px-3.5 py-2 rounded-xl text-xs font-medium text-gray-200 cursor-pointer hover:text-white transition-all flex items-center gap-2">
+                                <i class="fa-solid fa-cloud-arrow-up text-pink-400"></i>
+                                <span>Upload Sample Photos</span>
+                                <input type="file" id="samplePhotoInput" multiple accept="image/*" class="hidden">
+                            </label>
+                            <button onclick="resetDefaultPhotos()" class="glass-button px-3 py-2 rounded-xl text-xs text-gray-400 hover:text-gray-200 transition-all" title="Reset Default Stock Photos">
+                                <i class="fa-solid fa-rotate-left"></i>
+                            </button>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center space-x-2 w-full sm:w-auto">
+                            <button onclick="downloadFrameMockup()" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-semibold text-xs tracking-wider shadow-lg shadow-pink-500/25 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5">
+                                <i class="fa-solid fa-download"></i>
+                                <span>Download Mockup</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-5 space-y-6">
+                
+                <!-- 1. Layout Selector -->
+                <div class="glass-panel p-6 rounded-3xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-pink-400 flex items-center gap-2">
+                            <i class="fa-solid fa-table-cells-large"></i> 1. Select Frame Layout
+                        </h3>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3" id="layoutOptions">
+                        <!-- Options generated dynamically in JS -->
+                    </div>
+                </div>
+
+                <!-- 2. Border & Overlay Designs -->
+                <div class="glass-panel p-6 rounded-3xl">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-bold uppercase tracking-wider text-purple-400 flex items-center gap-2">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> 2. Choose Theme Overlay
+                        </h3>
+                        <span id="selectedThemeLabel" class="text-xs text-gray-400 font-medium">LC Signature</span>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3" id="themeOptions">
+                        <!-- Theme options generated dynamically -->
+                    </div>
+                </div>
+
+                <!-- 3. Event Text Personalization -->
+                <div class="glass-panel p-6 rounded-3xl space-y-4">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-gold-400 flex items-center gap-2">
+                        <i class="fa-solid fa-pen-nib"></i> 3. Event Customization
+                    </h3>
+                    
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 mb-1">Primary Event Title / Names</label>
+                        <div class="relative">
+                            <input type="text" id="eventTitleInput" value="Lester Cris" maxlength="32" class="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-all">
+                            <i class="fa-solid fa-heart text-xs text-gray-500 absolute right-3.5 top-3.5"></i>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 mb-1">Subtext / Date / Hashtag</label>
+                        <div class="relative">
+                            <input type="text" id="eventSubtextInput" value="October 24, 2026 • #LCWedding" maxlength="40" class="w-full bg-black/40 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-all">
+                            <i class="fa-solid fa-calendar text-xs text-gray-500 absolute right-3.5 top-3.5"></i>
+                        </div>
+                    </div>
+
+                    <!-- Font Style Picker -->
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-400 mb-1">Text Typography Style</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button onclick="setFontStyle('serif')" id="fontBtnSerif" class="glass-button py-2 rounded-xl text-xs font-serif italic text-white border-pink-500/50 bg-pink-500/10">Serif Elegance</button>
+                            <button onclick="setFontStyle('sans')" id="fontBtnSans" class="glass-button py-2 rounded-xl text-xs font-sans text-gray-300">Modern Clean</button>
+                            <button onclick="setFontStyle('script')" id="fontBtnScript" class="glass-button py-2 rounded-xl text-xs tracking-wider uppercase text-gray-300">Monospace Minimal</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Frame ID Summary Box -->
+                <div class="glass-panel p-5 rounded-3xl bg-gradient-to-r from-pink-900/20 to-purple-900/20 border border-pink-500/20 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] uppercase font-bold tracking-widest text-pink-400 block">Selected Frame Spec</span>
+                        <span id="frameSpecTag" class="text-sm font-bold text-white">STRIP-2x6-LC-SIGNATURE</span>
+                    </div>
+                    <button onclick="copyFrameCode()" class="px-3.5 py-2 rounded-xl bg-pink-500/20 hover:bg-pink-500/30 text-pink-300 border border-pink-500/40 text-xs font-semibold flex items-center gap-1.5 transition-all">
+                        <i class="fa-solid fa-copy"></i>
+                        <span>Copy Code</span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <div id="toastNotification" class="fixed bottom-6 right-6 z-50 glass-panel border border-pink-500/40 px-5 py-3.5 rounded-2xl shadow-2xl flex items-center space-x-3 translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-pink-400 text-lg"></i>
+        <span id="toastMessage" class="text-sm font-medium text-white">Frame design copied to clipboard!</span>
+    </div>
+
+    <footer class="border-t border-white/10 glass-panel mt-12 py-6">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500 gap-3">
+            <div class="flex items-center space-x-2">
+                <span class="font-black text-white">LC</span>
+                <span>• Studio Photo Booth Frame Selection Tool</span>
+            </div>
+            <p>© 2026 LC Events & Experiences. All layout templates reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        // --- DATA & CONFIGURATION ---
+        const LAYOUTS = {
+            'strip-2x6': {
+                id: 'strip-2x6',
+                name: '2x6 Photo Strip',
+                aspectRatio: 2/6,
+                width: 600,
+                height: 1800,
+                photoCount: 3,
+                description: 'Classic vertical photo booth strip (3 photos)'
+            },
+            'postcard-4x6': {
+                id: 'postcard-4x6',
+                name: '4x6 Postcard Grid',
+                aspectRatio: 6/4,
+                width: 1800,
+                height: 1200,
+                photoCount: 4,
+                description: '4-photo grid layout'
+            },
+            'polaroid-single': {
+                id: 'polaroid-single',
+                name: 'Polaroid Style',
+                aspectRatio: 4/5,
+                width: 1200,
+                height: 1500,
+                photoCount: 1,
+                description: 'Retro Polaroid layout with large subtitle area'
+            },
+            'glam-single': {
+                id: 'glam-single',
+                name: 'Single Portrait Glam',
+                aspectRatio: 4/6,
+                width: 1200,
+                height: 1800,
+                photoCount: 1,
+                description: 'High-impact full canvas portrait layout'
+            }
+        };
+
+        const THEMES = [
+            {
+                id: 'lc-signature',
+                name: 'LC Signature',
+                bg: '#0F172A',
+                accent: '#ffb6c1',
+                text: '#FFFFFF',
+                subtext: '#94A3B8',
+                borderWidth: 20,
+                style: 'dark'
+            },
+            {
+                id: 'gold-luxury',
+                name: 'Golden Luxury',
+                bg: '#050505',
+                accent: '#EAB308',
+                text: '#FACC15',
+                subtext: '#CA8A04',
+                borderWidth: 24,
+                style: 'gold'
+            },
+            {
+                id: 'elegance-floral',
+                name: 'Elegance Floral',
+                bg: '#FAF5FF',
+                accent: '#A855F7',
+                text: '#3B0764',
+                subtext: '#7E22CE',
+                borderWidth: 28,
+                style: 'light'
+            },
+            {
+                id: 'neon-cyber',
+                name: 'Neon Party',
+                bg: '#030712',
+                accent: '#06B6D4',
+                text: '#38BDF8',
+                subtext: '#818CF8',
+                borderWidth: 16,
+                style: 'neon'
+            },
+            {
+                id: 'minimal-modern',
+                name: 'Minimal White',
+                bg: '#FFFFFF',
+                accent: '#18181B',
+                text: '#09090B',
+                subtext: '#71717A',
+                borderWidth: 20,
+                style: 'clean'
+            },
+            {
+                id: 'rose-gold',
+                name: 'Rose Gold',
+                bg: '#1C1917',
+                accent: '#FB7185',
+                text: '#FECDD3',
+                subtext: '#F43F5E',
+                borderWidth: 22,
+                style: 'rose'
+            }
+        ];
+
+        // Stock placeholder images for live preview
+        const DEFAULT_STOCK_IMAGES = [
+            'https://images.unsplash.com/photo-1511632765486-a01980e01a18?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&w=800&q=80',
+            'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=800&q=80'
+        ];
+
+        // State Manager
+        let currentState = {
+            layout: 'strip-2x6',
+            theme: 'lc-signature',
+            title: 'Lester Cris',
+            subtext: 'October 24, 2026 • #LCWedding',
+            fontStyle: 'serif',
+            loadedImages: [],
+            photoOffsets: [],
+            photoZooms: []
+        };
+
+        const canvas = document.getElementById('frameCanvas');
+        const ctx = canvas.getContext('2d');
+        let photoHitAreas = [];
+        let activePhotoDrag = null;
+        let selectedPhotoIndex = 0;
+        let nextPhotoUploadSlot = 0;
+        let photoLoadGeneration = 0;
+        const customPhotoSlots = new Set();
+        const MIN_PHOTO_ZOOM = 1;
+        const MAX_PHOTO_ZOOM = 3;
+        const PHOTO_ZOOM_STEP = 0.15;
+
+        window.addEventListener('load', () => {
+            renderLayoutButtons();
+            renderThemeButtons();
+            loadDefaultPhotos();
+            setupEventListeners();
+        });
+
+        function renderLayoutButtons() {
+            const container = document.getElementById('layoutOptions');
+            container.innerHTML = Object.values(LAYOUTS).map(l => `
+                <button onclick="selectLayout('${l.id}')" id="layoutBtn-${l.id}" 
+                    class="glass-button p-3 rounded-2xl flex flex-col items-start text-left transition-all ${l.id === currentState.layout ? 'border-pink-500 bg-pink-500/10 text-white' : 'text-gray-400 hover:text-gray-200'}">
+                    <span class="text-xs font-bold block mb-1">${l.name}</span>
+                    <span class="text-[10px] text-gray-500 leading-tight">${l.description}</span>
+                </button>
+            `).join('');
+        }
+
+        function renderThemeButtons() {
+            const container = document.getElementById('themeOptions');
+            container.innerHTML = THEMES.map(t => `
+                <button onclick="selectTheme('${t.id}')" id="themeBtn-${t.id}"
+                    class="glass-button p-2.5 rounded-2xl flex flex-col items-center justify-center text-center transition-all ${t.id === currentState.theme ? 'border-pink-500 ring-2 ring-pink-500/30' : ''}">
+                    <div class="w-8 h-8 rounded-full mb-1.5 border border-white/20 flex items-center justify-center text-[10px] font-black" style="background: ${t.bg}; color: ${t.accent};">
+                        LC
+                    </div>
+                    <span class="text-[11px] font-semibold text-gray-200 block truncate w-full">${t.name}</span>
+                </button>
+            `).join('');
+        }
+
+        function loadDefaultPhotos() {
+            let completedCount = 0;
+            const generation = ++photoLoadGeneration;
+            currentState.loadedImages = [];
+            currentState.photoOffsets = [];
+            currentState.photoZooms = [];
+            customPhotoSlots.clear();
+            nextPhotoUploadSlot = 0;
+            selectedPhotoIndex = 0;
+            updatePhotoZoomControls();
+            
+            DEFAULT_STOCK_IMAGES.forEach((url, index) => {
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.src = url;
+                img.onload = () => {
+                    if (generation !== photoLoadGeneration) return;
+                    if (!customPhotoSlots.has(index)) {
+                        currentState.loadedImages[index] = img;
+                    }
+                    completedCount++;
+                    if (completedCount === DEFAULT_STOCK_IMAGES.length) {
+                        drawCanvas();
+                    }
+                };
+                img.onerror = () => {
+                    if (generation !== photoLoadGeneration) return;
+                    if (!customPhotoSlots.has(index)) {
+                        // Fallback colored canvas if image fails to load
+                        const fallbackCanvas = document.createElement('canvas');
+                        fallbackCanvas.width = 400;
+                        fallbackCanvas.height = 400;
+                        const fCtx = fallbackCanvas.getContext('2d');
+                        fCtx.fillStyle = '#334155';
+                        fCtx.fillRect(0,0,400,400);
+                        fCtx.fillStyle = '#94A3B8';
+                        fCtx.font = '20px sans-serif';
+                        fCtx.fillText(`Photo ${index + 1}`, 150, 200);
+                        
+                        const fallbackImg = new Image();
+                        fallbackImg.src = fallbackCanvas.toDataURL();
+                        currentState.loadedImages[index] = fallbackImg;
+                    }
+                    completedCount++;
+                    if (completedCount === DEFAULT_STOCK_IMAGES.length) {
+                        drawCanvas();
+                    }
+                };
+            });
+        }
+
+        function setupEventListeners() {
+            document.getElementById('eventTitleInput').addEventListener('input', (e) => {
+                currentState.title = e.target.value;
+                drawCanvas();
+                updateSpecTag();
+            });
+
+            document.getElementById('eventSubtextInput').addEventListener('input', (e) => {
+                currentState.subtext = e.target.value;
+                drawCanvas();
+                updateSpecTag();
+            });
+
+            document.getElementById('samplePhotoInput').addEventListener('change', handleUserPhotoUpload);
+
+canvas.style.touchAction = 'none';
+
+function getCanvasPoint(event) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (event.clientX - rect.left) * canvas.width / rect.width,
+        y: (event.clientY - rect.top) * canvas.height / rect.height
+    };
+}
+
+canvas.addEventListener('pointerdown', event => {
+    const point = getCanvasPoint(event);
+    const area = [...photoHitAreas].reverse().find(a =>
+        point.x >= a.x && point.x <= a.x + a.w &&
+        point.y >= a.y && point.y <= a.y + a.h
+    );
+    if (!area) return;
+
+    selectedPhotoIndex = area.index;
+    updatePhotoZoomControls();
+    activePhotoDrag = { index: area.index, area, point };
+    canvas.setPointerCapture(event.pointerId);
+    event.preventDefault();
+});
+
+canvas.addEventListener('pointermove', event => {
+    if (!activePhotoDrag) return;
+
+    const point = getCanvasPoint(event);
+    const drag = activePhotoDrag;
+    const offset = currentState.photoOffsets[drag.index] || { x: 0, y: 0 };
+
+    offset.x = Math.max(-drag.area.maxOffsetX, Math.min(drag.area.maxOffsetX,
+        offset.x + point.x - drag.point.x));
+    offset.y = Math.max(-drag.area.maxOffsetY, Math.min(drag.area.maxOffsetY,
+        offset.y + point.y - drag.point.y));
+
+    currentState.photoOffsets[drag.index] = offset;
+    drag.point = point;
+    drawCanvas();
+});
+
+function stopPhotoDrag() {
+    activePhotoDrag = null;
+}
+
+canvas.addEventListener('pointerup', stopPhotoDrag);
+canvas.addEventListener('pointercancel', stopPhotoDrag);
+canvas.addEventListener('wheel', event => {
+    const point = getCanvasPoint(event);
+    const area = [...photoHitAreas].reverse().find(a =>
+        point.x >= a.x && point.x <= a.x + a.w &&
+        point.y >= a.y && point.y <= a.y + a.h
+    );
+    if (!area) return;
+
+    selectedPhotoIndex = area.index;
+    updatePhotoZoomControls();
+    adjustSelectedPhotoZoom(event.deltaY < 0 ? 1 : -1);
+    event.preventDefault();
+}, { passive: false });
+        }
+        function handleUserPhotoUpload(e) {
+            const files = Array.from(e.target.files);
+            if (!files.length) return;
+
+            const slotCount = LAYOUTS[currentState.layout].photoCount;
+            const uploadCount = Math.min(files.length, slotCount);
+            const uploadStartSlot = nextPhotoUploadSlot % slotCount;
+            showLoader(true);
+            Promise.all(files.slice(0, uploadCount).map(readUploadedImage))
+                .then(images => {
+                    images.forEach((img, index) => {
+                        const slot = (uploadStartSlot + index) % slotCount;
+                        currentState.loadedImages[slot] = img;
+                        currentState.photoOffsets[slot] = { x: 0, y: 0 };
+                        currentState.photoZooms[slot] = MIN_PHOTO_ZOOM;
+                        customPhotoSlots.add(slot);
+                    });
+                    nextPhotoUploadSlot = (uploadStartSlot + images.length) % slotCount;
+                    selectedPhotoIndex = (uploadStartSlot + images.length - 1) % slotCount;
+                    updatePhotoZoomControls();
+                    drawCanvas();
+                    const slotMessage = `Photo${images.length === 1 ? '' : 's'} added to frame slot${images.length === 1 ? '' : 's'} ${Array.from({ length: images.length }, (_, i) => ((uploadStartSlot + i) % slotCount) + 1).join(', ')}.`;
+                    showToast(files.length > uploadCount
+                        ? `${slotMessage} Only ${uploadCount} photo${uploadCount === 1 ? '' : 's'} fit this layout.`
+                        : slotMessage);
+                })
+                .catch(error => {
+                    showToast(error instanceof Error ? error.message : 'Could not load the selected photos.');
+                })
+                .finally(() => {
+                    showLoader(false);
+                    e.target.value = '';
+                });
+        }
+
+        function readUploadedImage(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onerror = () => reject(new Error(`Could not read "${file.name}".`));
+                reader.onload = () => {
+                    const img = new Image();
+                    img.onload = () => resolve(img);
+                    img.onerror = () => reject(new Error(`Could not load "${file.name}" as an image.`));
+                    img.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function selectLayout(layoutId) {
+            currentState.layout = layoutId;
+            selectedPhotoIndex = 0;
+            updatePhotoZoomControls();
+            renderLayoutButtons();
+            
+            const layout = LAYOUTS[layoutId];
+            document.getElementById('currentLayoutName').textContent = layout.name;
+            document.getElementById('frameDimTag').textContent = `${layout.width} x ${layout.height} px`;
+            
+            updateSpecTag();
+            drawCanvas();
+        }
+
+        function selectTheme(themeId) {
+            currentState.theme = themeId;
+            renderThemeButtons();
+            
+            const theme = THEMES.find(t => t.id === themeId);
+            document.getElementById('selectedThemeLabel').textContent = theme.name;
+            
+            updateSpecTag();
+            drawCanvas();
+        }
+
+        function setFontStyle(style) {
+            currentState.fontStyle = style;
+            
+            // Reset styles
+            ['serif', 'sans', 'script'].forEach(s => {
+                const btn = document.getElementById(`fontBtn${s.charAt(0).toUpperCase() + s.slice(1)}`);
+                if (s === style) {
+                    btn.classList.add('border-pink-500', 'bg-pink-500/10', 'text-white');
+                    btn.classList.remove('text-gray-300');
+                } else {
+                    btn.classList.remove('border-pink-500', 'bg-pink-500/10', 'text-white');
+                    btn.classList.add('text-gray-300');
+                }
+            });
+
+            drawCanvas();
+        }
+
+        function updateSpecTag() {
+            const spec = `${currentState.layout.toUpperCase()}-${currentState.theme.toUpperCase()}`;
+            document.getElementById('frameSpecTag').textContent = spec;
+        }
+
+        function drawCanvas() {
+            const layout = LAYOUTS[currentState.layout];
+            const theme = THEMES.find(t => t.id === currentState.theme);
+
+            canvas.width = layout.width;
+            canvas.height = layout.height;
+
+            // 1. Draw Background
+            ctx.fillStyle = theme.bg;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 2. Draw Decorative Border Frame
+            ctx.strokeStyle = theme.accent;
+            ctx.lineWidth = theme.borderWidth;
+            ctx.strokeRect(theme.borderWidth/2, theme.borderWidth/2, canvas.width - theme.borderWidth, canvas.height - theme.borderWidth);
+
+            // 3. Render Photos based on Layout
+            photoHitAreas = [];
+            if (currentState.layout === 'strip-2x6') {
+                drawStrip2x6(layout, theme);
+            } else if (currentState.layout === 'postcard-4x6') {
+                drawPostcard4x6(layout, theme);
+            } else if (currentState.layout === 'polaroid-single') {
+                drawPolaroidSingle(layout, theme);
+            } else if (currentState.layout === 'glam-single') {
+                drawGlamSingle(layout, theme);
+            }
+
+            // 4. Draw Branding & LC Logo Overlay
+            drawBrandingOverlay(layout, theme);
+        }
+
+        function adjustSelectedPhotoZoom(direction) {
+            const currentZoom = currentState.photoZooms[selectedPhotoIndex] || MIN_PHOTO_ZOOM;
+            const nextZoom = Math.max(MIN_PHOTO_ZOOM, Math.min(MAX_PHOTO_ZOOM,
+                currentZoom + direction * PHOTO_ZOOM_STEP));
+            currentState.photoZooms[selectedPhotoIndex] = Number(nextZoom.toFixed(2));
+            updatePhotoZoomControls();
+            drawCanvas();
+        }
+
+        function resetSelectedPhotoZoom() {
+            currentState.photoZooms[selectedPhotoIndex] = MIN_PHOTO_ZOOM;
+            currentState.photoOffsets[selectedPhotoIndex] = { x: 0, y: 0 };
+            updatePhotoZoomControls();
+            drawCanvas();
+        }
+
+        function updatePhotoZoomControls() {
+            const zoom = currentState.photoZooms[selectedPhotoIndex] || MIN_PHOTO_ZOOM;
+            const label = document.getElementById('selectedPhotoLabel');
+            const zoomOutButton = document.getElementById('zoomOutButton');
+            const zoomInButton = document.getElementById('zoomInButton');
+            if (!label || !zoomOutButton || !zoomInButton) return;
+
+            label.textContent = `Photo ${selectedPhotoIndex + 1} selected · ${Math.round(zoom * 100)}%`;
+            zoomOutButton.disabled = zoom <= MIN_PHOTO_ZOOM;
+            zoomInButton.disabled = zoom >= MAX_PHOTO_ZOOM;
+        }
+
+        function drawStrip2x6(layout, theme) {
+            const margin = 45;
+            const photoW = layout.width - (margin * 2);
+            const photoH = 430;
+            const startY = 60;
+            const gap = 30;
+
+            for (let i = 0; i < 3; i++) {
+                const y = startY + i * (photoH + gap);
+                const img = currentState.loadedImages[i % currentState.loadedImages.length];
+                
+                if (img) {
+                    drawPhotoSlot(img, i, margin, y, photoW, photoH);
+                }
+
+                // Inner subtle frame around photo
+                ctx.strokeStyle = theme.subtext + '40';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(margin, y, photoW, photoH);
+            }
+        }
+
+        function drawPostcard4x6(layout, theme) {
+            const margin = 50;
+            const gap = 30;
+            const photoW = (layout.width - (margin * 2) - gap) / 2;
+            const photoH = 380;
+            const startY = 60;
+
+            const slots = [
+                { x: margin, y: startY },
+                { x: margin + photoW + gap, y: startY },
+                { x: margin, y: startY + photoH + gap },
+                { x: margin + photoW + gap, y: startY + photoH + gap }
+            ];
+
+            slots.forEach((slot, i) => {
+                const img = currentState.loadedImages[i % currentState.loadedImages.length];
+                if (img) {
+                    drawPhotoSlot(img, i, slot.x, slot.y, photoW, photoH);
+                }
+                ctx.strokeStyle = theme.subtext + '40';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(slot.x, slot.y, photoW, photoH);
+            });
+        }
+
+        function drawPolaroidSingle(layout, theme) {
+            const margin = 60;
+            const photoW = layout.width - (margin * 2);
+            const photoH = 950;
+            const y = 80;
+
+            const img = currentState.loadedImages[0];
+            if (img) {
+                drawPhotoSlot(img, 0, margin, y, photoW, photoH);
+            }
+            ctx.strokeStyle = theme.subtext + '40';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(margin, y, photoW, photoH);
+        }
+
+        function drawGlamSingle(layout, theme) {
+            const margin = 40;
+            const photoW = layout.width - (margin * 2);
+            const photoH = 1350;
+            const y = 50;
+
+            const img = currentState.loadedImages[0];
+            if (img) {
+                drawPhotoSlot(img, 0, margin, y, photoW, photoH);
+            }
+        }
+
+        function drawBrandingOverlay(layout, theme) {
+            ctx.save();
+            ctx.textAlign = 'center';
+
+            // Selected Font Family Logic
+            let fontName = 'Playfair Display, serif';
+            if (currentState.fontStyle === 'sans') fontName = 'Inter, sans-serif';
+            if (currentState.fontStyle === 'script') fontName = 'Courier New, monospace';
+
+            // Calculate bottom footer placement area
+            const footerY = layout.height - 150;
+
+            // LC Monogram Logo
+            ctx.fillStyle = theme.accent;
+            ctx.font = `bold 28px Inter, sans-serif`;
+            ctx.fillText('L C', layout.width / 2, footerY - 105);
+
+            // Primary Custom Title Text
+            ctx.fillStyle = theme.text;
+            ctx.font = `bold 36px ${fontName}`;
+            ctx.fillText(currentState.title || 'Name', layout.width / 2, footerY - 65);
+
+            // Secondary Subtext
+            ctx.fillStyle = theme.subtext;
+            ctx.font = `500 20px Inter, sans-serif`;
+            ctx.fillText(currentState.subtext || 'Date', layout.width / 2, footerY - 30);
+
+            ctx.restore();
+        }
+
+        // Helper to draw object-fit: cover images inside canvas rectangular slots
+        function drawPhotoSlot(img, i, x, y, w, h) {
+            const offset = currentState.photoOffsets[i] || { x: 0, y: 0 };
+            const zoom = currentState.photoZooms[i] || MIN_PHOTO_ZOOM;
+            const imgRatio = img.width / img.height;
+            const targetRatio = w / h;
+            let renderW, renderH, renderX, renderY;
+
+            if (imgRatio > targetRatio) {
+                renderH = h;
+                renderW = h * imgRatio;
+                renderX = x - (renderW - w) / 2;
+                renderY = y;
+            } else {
+                renderW = w;
+                renderH = w / imgRatio;
+                renderX = x;
+                renderY = y - (renderH - h) / 2;
+            }
+
+            renderW *= zoom;
+            renderH *= zoom;
+            renderX = x + (w - renderW) / 2;
+            renderY = y + (h - renderH) / 2;
+
+            const maxOffsetX = Math.max(0, (renderW - w) / 2);
+            const maxOffsetY = Math.max(0, (renderH - h) / 2);
+            photoHitAreas.push({ index: i, x, y, w, h, maxOffsetX, maxOffsetY });
+
+            renderX += Math.max(-maxOffsetX, Math.min(maxOffsetX, offset.x));
+            renderY += Math.max(-maxOffsetY, Math.min(maxOffsetY, offset.y));
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x, y, w, h);
+            ctx.clip();
+            ctx.drawImage(img, renderX, renderY, renderW, renderH);
+            ctx.restore();
+        }
+
+        function downloadFrameMockup() {
+            showLoader(true);
+            setTimeout(() => {
+                const link = document.createElement('a');
+                const layoutName = currentState.layout.toUpperCase();
+                link.download = `LC-PhotoBooth-Frame-${layoutName}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                showLoader(false);
+                showToast('LC Frame Preview Mockup downloaded!');
+            }, 300);
+        }
+
+        function copyFrameCode() {
+            const spec = document.getElementById('frameSpecTag').textContent;
+            navigator.clipboard.writeText(spec);
+            showToast(`Copied Spec: ${spec}`);
+        }
+
+        function shareSelection() {
+            const spec = document.getElementById('frameSpecTag').textContent;
+            const text = `Check out my chosen LC Photo Booth Frame Template: ${spec}`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'LC Photo Booth Frame Selection',
+                    text: text,
+                    url: window.location.href
+                }).catch(() => {});
+            } else {
+                navigator.clipboard.writeText(text);
+                showToast('Frame Selection link copied!');
+            }
+        }
+
+        function resetDefaultPhotos() {
+            showLoader(true);
+            loadDefaultPhotos();
+            setTimeout(() => {
+                showLoader(false);
+                showToast('Reset to default studio sample photos');
+            }, 400);
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastNotification');
+            const toastMsg = document.getElementById('toastMessage');
+            toastMsg.textContent = msg;
+
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+            }, 3500);
+        }
+
+        function showLoader(visible) {
+            const loader = document.getElementById('canvasLoader');
+            if (visible) {
+                loader.classList.remove('opacity-0', 'pointer-events-none');
+            } else {
+                loader.classList.add('opacity-0', 'pointer-events-none');
+            }
+        }
+    </script>
+</body>
+</html>
