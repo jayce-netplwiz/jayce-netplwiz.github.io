@@ -91,6 +91,30 @@
             box-shadow: 0 20px 40px -15px rgba(0,0,0,0.8);
         }
 
+        #mobileCameraModal[hidden] {
+            display: none;
+        }
+
+        #mobileCameraModal {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            background: rgba(0, 0, 0, 0.88);
+        }
+
+        #mobileCameraVideo {
+            display: block;
+            width: 100%;
+            max-height: 62svh;
+            border-radius: 1rem;
+            object-fit: cover;
+            background: #080B11;
+        }
+
         @media (max-width: 640px) {
             #previewCard {
                 min-height: 0;
@@ -167,6 +191,20 @@
     <div id="printContainer" aria-hidden="true">
         <img id="printFrameImage" alt="Customized photo booth frame">
     </div>
+    <div id="mobileCameraModal" hidden role="dialog" aria-modal="true" aria-labelledby="mobileCameraTitle">
+        <section class="glass-panel w-full max-w-lg rounded-3xl p-5 sm:p-7 text-center">
+            <h2 id="mobileCameraTitle" class="text-lg font-bold text-white">Photo booth</h2>
+            <p id="mobileCameraProgress" class="mt-1 text-sm text-gray-300" aria-live="polite"></p>
+            <div class="relative mt-4 overflow-hidden rounded-2xl">
+                <video id="mobileCameraVideo" autoplay playsinline muted></video>
+                <div id="mobileCameraCountdown" class="absolute inset-0 flex items-center justify-center text-7xl font-black text-white drop-shadow-lg" aria-live="assertive"></div>
+            </div>
+            <p class="mt-4 text-sm text-gray-300">Hold still. The photo will be taken when the countdown ends.</p>
+            <button id="cancelMobileCamera" type="button" class="glass-button mt-5 w-full rounded-xl px-4 py-3 text-sm font-semibold text-white">
+                Pause photo session
+            </button>
+        </section>
+    </div>
 
     <header class="sticky top-0 z-50 glass-panel border-b border-white/10">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
@@ -236,14 +274,17 @@
                         <span class="text-gray-500">Select or drag a photo to adjust it</span>
                     </div>
 
+                    <div class="w-full mt-3 flex flex-wrap items-center justify-center gap-2" id="photoSlotOptions" aria-label="Select a photo slot">
+                        <!-- Slot buttons generated dynamically -->
+                    </div>
+
                     <!-- Photo Upload / Sample Controls -->
                     <div class="w-full mt-6 pt-4 border-t border-white/5 flex flex-wrap items-center justify-between gap-3">
                         <div class="flex items-center space-x-2">
-                            <label class="glass-button px-3.5 py-2 rounded-xl text-xs font-medium text-gray-200 cursor-pointer hover:text-white transition-all flex items-center gap-2">
+                            <button id="mobileCameraButton" onclick="startMobilePhotoSession()" type="button" class="glass-button px-3.5 py-2 rounded-xl text-xs font-medium text-gray-200 hover:text-white transition-all flex items-center gap-2">
                                 <i class="fa-solid fa-camera text-pink-400"></i>
-                                <span>Import Photo</span>
-                                <input type="file" id="cameraPhotoInput" accept="image/*" capture="environment" class="hidden">
-                            </label>
+                                <span>Take Photos</span>
+                            </button>
                             <label class="glass-button px-3.5 py-2 rounded-xl text-xs font-medium text-gray-200 cursor-pointer hover:text-white transition-all flex items-center gap-2">
                                 <i class="fa-solid fa-cloud-arrow-up text-pink-400"></i>
                                 <span>Upload Sample Photos</span>
@@ -360,14 +401,14 @@
                 photoCount: 3,
                 description: 'Classic vertical photo booth strip (3 photos)'
             },
-            'postcard-4x6': {
-                id: 'postcard-4x6',
-                name: '4x6 Postcard Grid',
-                aspectRatio: 6/4,
-                width: 1800,
-                height: 1200,
+            'portrait-4photo': {
+                id: 'portrait-4photo',
+                name: 'Portrait 4-Photo Grid',
+                aspectRatio: 4/6,
+                width: 1200,
+                height: 1800,
                 photoCount: 4,
-                description: '4-photo grid layout'
+                description: 'Portrait 4x6 layout with four photo slots'
             },
             'polaroid-single': {
                 id: 'polaroid-single',
@@ -472,13 +513,18 @@
             photoZooms: []
         };
 
+        const ipcRenderer = typeof require === 'function'
+            ? require('electron').ipcRenderer
+            : null;
         const canvas = document.getElementById('frameCanvas');
         const ctx = canvas.getContext('2d');
         let photoHitAreas = [];
         let activePhotoDrag = null;
         let selectedPhotoIndex = 0;
-        let nextPhotoUploadSlot = 0;
         let photoLoadGeneration = 0;
+        let isPrintingFrame = false;
+        let mobileCameraSession = null;
+        let mobileCameraProgress = { layoutId: currentState.layout, capturedCount: 0 };
         const customPhotoSlots = new Set();
         const MIN_PHOTO_ZOOM = 1;
         const MAX_PHOTO_ZOOM = 3;
@@ -487,8 +533,10 @@
         window.addEventListener('load', () => {
             renderLayoutButtons();
             renderThemeButtons();
+            renderPhotoSlotButtons();
             loadDefaultPhotos();
             setupEventListeners();
+            document.getElementById('cancelMobileCamera').addEventListener('click', cancelMobilePhotoSession);
         });
 
         function renderLayoutButtons() {
@@ -522,7 +570,6 @@
             currentState.photoOffsets = [];
             currentState.photoZooms = [];
             customPhotoSlots.clear();
-            nextPhotoUploadSlot = 0;
             selectedPhotoIndex = 0;
             updatePhotoZoomControls();
             
@@ -580,7 +627,6 @@
             });
 
             document.getElementById('samplePhotoInput').addEventListener('change', handleUserPhotoUpload);
-            document.getElementById('cameraPhotoInput').addEventListener('change', handleUserPhotoUpload);
 
 canvas.style.touchAction = 'none';
 
@@ -602,6 +648,7 @@ canvas.addEventListener('pointerdown', event => {
 
     selectedPhotoIndex = area.index;
     updatePhotoZoomControls();
+    drawCanvas();
     activePhotoDrag = { index: area.index, area, point };
     canvas.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -650,7 +697,7 @@ canvas.addEventListener('wheel', event => {
 
             const slotCount = LAYOUTS[currentState.layout].photoCount;
             const uploadCount = Math.min(files.length, slotCount);
-            const uploadStartSlot = nextPhotoUploadSlot % slotCount;
+            const uploadStartSlot = selectedPhotoIndex % slotCount;
             showLoader(true);
             Promise.all(files.slice(0, uploadCount).map(readUploadedImage))
                 .then(images => {
@@ -661,7 +708,6 @@ canvas.addEventListener('wheel', event => {
                         currentState.photoZooms[slot] = MIN_PHOTO_ZOOM;
                         customPhotoSlots.add(slot);
                     });
-                    nextPhotoUploadSlot = (uploadStartSlot + images.length) % slotCount;
                     selectedPhotoIndex = (uploadStartSlot + images.length - 1) % slotCount;
                     updatePhotoZoomControls();
                     drawCanvas();
@@ -693,8 +739,122 @@ canvas.addEventListener('wheel', event => {
             });
         }
 
+        async function startMobilePhotoSession() {
+            if (mobileCameraSession) return;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showToast('Camera access requires HTTPS or the installed desktop app. Open this page on a secure connection.');
+                return;
+            }
+
+            const modal = document.getElementById('mobileCameraModal');
+            const video = document.getElementById('mobileCameraVideo');
+            const progress = document.getElementById('mobileCameraProgress');
+            const countdown = document.getElementById('mobileCameraCountdown');
+            const session = { cancelled: false, stream: null };
+            mobileCameraSession = session;
+            modal.hidden = false;
+            document.getElementById('mobileCameraButton').disabled = true;
+
+            try {
+                session.stream = await navigator.mediaDevices.getUserMedia({
+                    audio: false,
+                    video: { facingMode: { ideal: 'environment' } }
+                });
+                if (session.cancelled) {
+                    session.stream.getTracks().forEach(track => track.stop());
+                    return;
+                }
+
+                video.srcObject = session.stream;
+                await video.play();
+                const slotCount = LAYOUTS[currentState.layout].photoCount;
+                if (mobileCameraProgress.layoutId !== currentState.layout) {
+                    mobileCameraProgress = { layoutId: currentState.layout, capturedCount: 0 };
+                }
+
+                for (let slot = mobileCameraProgress.capturedCount; slot < slotCount; slot++) {
+                    progress.textContent = `Photo ${slot + 1} of ${slotCount}`;
+                    for (let seconds = 5; seconds > 0; seconds--) {
+                        countdown.textContent = String(seconds);
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                        if (session.cancelled) return;
+                    }
+
+                    countdown.textContent = '✓';
+                    const captureCanvas = document.createElement('canvas');
+                    captureCanvas.width = video.videoWidth;
+                    captureCanvas.height = video.videoHeight;
+                    if (!captureCanvas.width || !captureCanvas.height) {
+                        throw new Error('The camera is not ready. Please try again.');
+                    }
+                    captureCanvas.getContext('2d').drawImage(video, 0, 0);
+                    const photo = await readUploadedImageData(captureCanvas.toDataURL('image/jpeg', 0.92));
+                    currentState.loadedImages[slot] = photo;
+                    currentState.photoOffsets[slot] = { x: 0, y: 0 };
+                    currentState.photoZooms[slot] = MIN_PHOTO_ZOOM;
+                    customPhotoSlots.add(slot);
+                    mobileCameraProgress.capturedCount = slot + 1;
+                    selectedPhotoIndex = slot;
+                    updatePhotoZoomControls();
+                    drawCanvas();
+                    progress.textContent = `Photo ${slot + 1} of ${slotCount} captured`;
+                    if (mobileCameraProgress.capturedCount < slotCount) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                        if (session.cancelled) return;
+                    }
+                }
+
+                if (mobileCameraProgress.capturedCount !== slotCount) return;
+                closeMobilePhotoSession(session);
+                mobileCameraProgress = { layoutId: currentState.layout, capturedCount: 0 };
+                showToast(`All ${slotCount} photo slots are complete. You can edit the frame now.`);
+            } catch (error) {
+                closeMobilePhotoSession(session);
+                showToast(error instanceof Error
+                    ? `Could not complete the camera session: ${error.message}`
+                    : 'Could not complete the camera session.');
+            }
+        }
+
+        function readUploadedImageData(dataUrl) {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => reject(new Error('Could not load a captured photo.'));
+                image.src = dataUrl;
+            });
+        }
+
+        function cancelMobilePhotoSession() {
+            if (mobileCameraSession) {
+                const capturedCount = mobileCameraProgress.capturedCount;
+                mobileCameraSession.cancelled = true;
+                closeMobilePhotoSession(mobileCameraSession);
+                showToast(capturedCount
+                    ? `Photo session paused. ${capturedCount} slot${capturedCount === 1 ? '' : 's'} saved; resume to fill the rest of the frame.`
+                    : 'Photo session cancelled. No photos were captured.');
+            }
+        }
+
+        function closeMobilePhotoSession(session) {
+            if (session.stream) {
+                session.stream.getTracks().forEach(track => track.stop());
+            }
+            const video = document.getElementById('mobileCameraVideo');
+            video.pause();
+            video.srcObject = null;
+            document.getElementById('mobileCameraCountdown').textContent = '';
+            document.getElementById('mobileCameraProgress').textContent = '';
+            document.getElementById('mobileCameraModal').hidden = true;
+            document.getElementById('mobileCameraButton').disabled = false;
+            if (mobileCameraSession === session) {
+                mobileCameraSession = null;
+            }
+        }
+
         function selectLayout(layoutId) {
             currentState.layout = layoutId;
+            mobileCameraProgress = { layoutId, capturedCount: 0 };
             selectedPhotoIndex = 0;
             updatePhotoZoomControls();
             renderLayoutButtons();
@@ -764,13 +924,14 @@ canvas.addEventListener('wheel', event => {
             photoHitAreas = [];
             if (currentState.layout === 'strip-2x6') {
                 drawStrip2x6(layout, theme);
-            } else if (currentState.layout === 'postcard-4x6') {
-                drawPostcard4x6(layout, theme);
+            } else if (currentState.layout === 'portrait-4photo') {
+                drawPortrait4Photo(layout, theme);
             } else if (currentState.layout === 'polaroid-single') {
                 drawPolaroidSingle(layout, theme);
             } else if (currentState.layout === 'glam-single') {
                 drawGlamSingle(layout, theme);
             }
+            drawPhotoSlotFrames(theme);
 
             // 4. Draw Branding & LC Logo Overlay
             drawBrandingOverlay(layout, theme);
@@ -802,6 +963,29 @@ canvas.addEventListener('wheel', event => {
             label.textContent = `Photo ${selectedPhotoIndex + 1} selected · ${Math.round(zoom * 100)}%`;
             zoomOutButton.disabled = zoom <= MIN_PHOTO_ZOOM;
             zoomInButton.disabled = zoom >= MAX_PHOTO_ZOOM;
+            renderPhotoSlotButtons();
+        }
+
+        function renderPhotoSlotButtons() {
+            const container = document.getElementById('photoSlotOptions');
+            if (!container) return;
+
+            const slotCount = LAYOUTS[currentState.layout].photoCount;
+            container.innerHTML = `<span class="text-gray-400 text-xs mr-1">Choose slot:</span>` +
+                Array.from({ length: slotCount }, (_, index) => `
+                    <button type="button" onclick="selectPhotoSlot(${index})"
+                        aria-label="Select photo slot ${index + 1}"
+                        aria-pressed="${index === selectedPhotoIndex}"
+                        class="glass-button min-w-10 px-3 py-2 rounded-lg text-xs font-semibold transition-all ${index === selectedPhotoIndex ? 'border-pink-500 bg-pink-500/20 text-white' : 'text-gray-400 hover:text-white'}">
+                        ${index + 1}
+                    </button>
+                `).join('');
+        }
+
+        function selectPhotoSlot(index) {
+            selectedPhotoIndex = index;
+            updatePhotoZoomControls();
+            drawCanvas();
         }
 
         function drawStrip2x6(layout, theme) {
@@ -818,19 +1002,14 @@ canvas.addEventListener('wheel', event => {
                 if (img) {
                     drawPhotoSlot(img, i, margin, y, photoW, photoH);
                 }
-
-                // Inner subtle frame around photo
-                ctx.strokeStyle = theme.subtext + '40';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(margin, y, photoW, photoH);
             }
         }
 
-        function drawPostcard4x6(layout, theme) {
+        function drawPortrait4Photo(layout, theme) {
             const margin = 50;
             const gap = 30;
             const photoW = (layout.width - (margin * 2) - gap) / 2;
-            const photoH = 380;
+            const photoH = 680;
             const startY = 60;
 
             const slots = [
@@ -845,9 +1024,6 @@ canvas.addEventListener('wheel', event => {
                 if (img) {
                     drawPhotoSlot(img, i, slot.x, slot.y, photoW, photoH);
                 }
-                ctx.strokeStyle = theme.subtext + '40';
-                ctx.lineWidth = 2;
-                ctx.strokeRect(slot.x, slot.y, photoW, photoH);
             });
         }
 
@@ -861,9 +1037,6 @@ canvas.addEventListener('wheel', event => {
             if (img) {
                 drawPhotoSlot(img, 0, margin, y, photoW, photoH);
             }
-            ctx.strokeStyle = theme.subtext + '40';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(margin, y, photoW, photoH);
         }
 
         function drawGlamSingle(layout, theme) {
@@ -876,6 +1049,49 @@ canvas.addEventListener('wheel', event => {
             if (img) {
                 drawPhotoSlot(img, 0, margin, y, photoW, photoH);
             }
+        }
+
+        function drawPhotoSlotFrames(theme) {
+            const layout = LAYOUTS[currentState.layout];
+            if (currentState.layout === 'strip-2x6') {
+                const margin = 45;
+                const photoW = layout.width - margin * 2;
+                for (let index = 0; index < 3; index++) {
+                    drawPhotoSlotFrame(theme, index, margin, 60 + index * 460, photoW, 430);
+                }
+            } else if (currentState.layout === 'portrait-4photo') {
+                const margin = 50;
+                const gap = 30;
+                const photoW = (layout.width - margin * 2 - gap) / 2;
+                const photoH = 680;
+                [
+                    { x: margin, y: 60 },
+                    { x: margin + photoW + gap, y: 60 },
+                    { x: margin, y: 60 + photoH + gap },
+                    { x: margin + photoW + gap, y: 60 + photoH + gap }
+                ].forEach((slot, index) => {
+                    drawPhotoSlotFrame(theme, index, slot.x, slot.y, photoW, photoH);
+                });
+            } else if (currentState.layout === 'polaroid-single') {
+                drawPhotoSlotFrame(theme, 0, 60, 80, layout.width - 120, 950);
+            } else if (currentState.layout === 'glam-single') {
+                drawPhotoSlotFrame(theme, 0, 40, 50, layout.width - 80, 1350);
+            }
+        }
+
+        function drawPhotoSlotFrame(theme, index, x, y, width, height) {
+            ctx.save();
+            ctx.strokeStyle = index === selectedPhotoIndex ? theme.accent : theme.subtext;
+            ctx.globalAlpha = index === selectedPhotoIndex ? 1 : 0.85;
+            ctx.lineWidth = index === selectedPhotoIndex ? 8 : 4;
+            ctx.strokeRect(x, y, width, height);
+
+            if (index === selectedPhotoIndex) {
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x + 5, y + 5, width - 10, height - 10);
+            }
+            ctx.restore();
         }
 
         function drawBrandingOverlay(layout, theme) {
@@ -961,28 +1177,84 @@ canvas.addEventListener('wheel', event => {
             }, 300);
         }
 
-        function printFrame() {
+        async function printFrame() {
+            if (isPrintingFrame) return;
+            if (!ipcRenderer) {
+                showToast('QR printing is available in the LC Photo Booth desktop app.');
+                return;
+            }
+            isPrintingFrame = true;
             const printImage = document.getElementById('printFrameImage');
 
             try {
+                const { qrDataUrl } = await ipcRenderer.invoke(
+                    'create-photo-share',
+                    canvas.toDataURL('image/png')
+                );
+                const qrImage = await loadPrintImage(qrDataUrl);
+                const printCanvas = document.createElement('canvas');
+                printCanvas.width = canvas.width;
+                printCanvas.height = canvas.height;
+                const printContext = printCanvas.getContext('2d');
+                printContext.drawImage(canvas, 0, 0);
+
+                const qrSize = Math.min(120, Math.floor(canvas.width * 0.2));
+                const qrX = Math.round((canvas.width - qrSize) / 2);
+                const qrY = canvas.height - qrSize - 18;
+                printContext.fillStyle = '#FFFFFF';
+                printContext.fillRect(qrX - 8, qrY - 8, qrSize + 16, qrSize + 16);
+                printContext.drawImage(qrImage, qrX, qrY, qrSize, qrSize);
+                const printDataUrl = printCanvas.toDataURL('image/png');
+
                 printImage.onload = () => {
                     printImage.onload = null;
                     printImage.onerror = null;
-                    window.print();
+                    ipcRenderer.invoke('print-frame')
+                        .then(result => {
+                            if (!result.success) {
+                                showToast(result.failureReason === 'cancelled'
+                                    ? 'Printing cancelled.'
+                                    : `Could not print the frame: ${result.failureReason || 'unknown error'}`);
+                                return;
+                            }
+
+                            showToast(result.batchRotated
+                                ? `QR batch reset after ${result.printCount} prints. Previous photo links remain available while the app is open.`
+                                : `QR code added. Scan it on the same Wi-Fi to download the photo (${result.printCount}/10 in this QR batch).`);
+                        })
+                        .catch(error => {
+                            showToast(error instanceof Error
+                                ? `Could not print the frame: ${error.message}`
+                                : 'Could not print the frame.');
+                        })
+                        .finally(() => {
+                            isPrintingFrame = false;
+                        });
                 };
                 printImage.onerror = () => {
                     printImage.onload = null;
                     printImage.onerror = null;
                     showToast('Could not prepare the frame for printing.');
+                    isPrintingFrame = false;
                 };
-                printImage.src = canvas.toDataURL('image/png');
+                printImage.src = printDataUrl;
             } catch (error) {
                 printImage.onload = null;
                 printImage.onerror = null;
                 showToast(error instanceof Error
                     ? `Could not prepare the frame for printing: ${error.message}`
                     : 'Could not prepare the frame for printing.');
+                isPrintingFrame = false;
             }
+        }
+
+        function loadPrintImage(src) {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => reject(new Error('Could not generate the print QR code.'));
+                image.src = src;
+            });
         }
 
         function copyFrameCode() {
@@ -995,6 +1267,7 @@ canvas.addEventListener('wheel', event => {
 
         function resetDefaultPhotos() {
             showLoader(true);
+            mobileCameraProgress = { layoutId: currentState.layout, capturedCount: 0 };
             loadDefaultPhotos();
             setTimeout(() => {
                 showLoader(false);
